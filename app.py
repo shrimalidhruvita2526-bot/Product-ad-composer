@@ -21,15 +21,6 @@ from PIL import Image, ImageDraw, ImageFont, ImageColor
 from dotenv import load_dotenv
 import random
 
-# --- Try loading heavy ML libraries (Hybrid Fallback) ---
-try:
-    import torch
-    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-    ML_AVAILABLE = True
-except ImportError:
-    logger.warning("Local ML libraries (torch/transformers) not found. App will use Cloud API mode.")
-    ML_AVAILABLE = False
-
 # ---------------------------------------------------------------------------
 # Logging Configuration
 # ---------------------------------------------------------------------------
@@ -39,6 +30,15 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+# --- Try loading heavy ML libraries (Hybrid Fallback) ---
+try:
+    import torch
+    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+    ML_AVAILABLE = True
+except ImportError:
+    logger.warning("Local ML libraries (torch/transformers) not found. App will use Cloud API mode.")
+    ML_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # Environment & API Keys
