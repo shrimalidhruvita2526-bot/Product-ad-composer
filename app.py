@@ -242,8 +242,8 @@ def generate_image_prompt_api(api_key: str, prompt_input: str) -> str | None:
     """
     headers = {"Authorization": f"Bearer {api_key.strip()}"}
     payload = {
-        "inputs": f"<|im_start|>system\nYou are a professional creative director. Write ONE concise, detailed photorealistic image prompt (max 50 words) for a product ad based on the user's input. Output ONLY the prompt text.<|im_end|>\n<|im_start|>user\n{prompt_input}<|im_end|>\n<|im_start|>assistant\n",
-        "parameters": {"max_new_tokens": 100, "temperature": 0.3}
+        "inputs": f"<|im_start|>system\nYou are a world-class creative director and product photographer. Write ONE extremely detailed, photorealistic image prompt (max 60 words) for a high-end commercial ad. Focus on the authentic physical design of the product, its texture, and professional studio lighting. Output ONLY the prompt text.<|im_end|>\n<|im_start|>user\n{prompt_input}<|im_end|>\n<|im_start|>assistant\n",
+        "parameters": {"max_new_tokens": 120, "temperature": 0.3}
     }
     try:
         response = requests.post(HF_TEXT_URL, headers=headers, json=payload, timeout=20)
@@ -280,8 +280,9 @@ def generate_image_prompt_hybrid(
     style = DEMOGRAPHIC_STYLES.get(demographic, DEMOGRAPHIC_STYLES["Professionals"])
     prompt_input = (
         f"Product: {product_name}. Brand: {brand_name}. Audience: {demographic}. "
-        f"Slogan: \"{slogan}\". Style: {style['aesthetic']}. "
-        f"Commercial photography prompt, 8k resolution."
+        f"Style: {style['aesthetic']}. "
+        f"Authentic product design, hyper-realistic, photorealistic commercial photography, 8k resolution, elegant studio lighting, sharp focus on product textures. "
+        f"NO TEXT, NO TYPOGRAPHY, NO WORDS, NO SLOGANS, NO GIBBERISH inside the image."
     )
 
     prompt_text = None
@@ -295,7 +296,7 @@ def generate_image_prompt_hybrid(
     elif engine == "🤖 Generate Local" and llm_pipeline:
         try:
             # Re-using the logic from the previous generate_image_prompt_llm
-            system_msg = "You are a professional creative director. Write ONE concise, detailed image prompt for a product advertisement. Include the brand and slogan. Output ONLY prompt text."
+            system_msg = "You are a professional creative director. Write ONE extremely detailed, photorealistic image prompt for a commercial product advertisement. Focus ONLY on the visual design, lighting, and textures. Output ONLY the prompt text. NO TEXT INSIDE THE IMAGE."
             messages = [
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": prompt_input},
@@ -308,8 +309,9 @@ def generate_image_prompt_hybrid(
     # Fallback if both fail or not selected
     if not prompt_text:
         prompt_text = (
-            f"Professional high-end commercial photography of {product_name}, "
-            f"{style['aesthetic']}, studio lighting, 8k, highly detailed, sharp focus."
+            f"Hyper-realistic professional commercial photography of {product_name}, "
+            f"authentic {style['aesthetic']} design, luxury studio lighting, high-end product shot, "
+            f"8k resolution, extremely detailed, macro lens sharp focus."
         )
 
     _prompt_cache[cache_key] = prompt_text
@@ -320,67 +322,64 @@ def generate_image_prompt_hybrid(
 # Business Logic — Image Generation via Hugging Face API
 # ---------------------------------------------------------------------------
 
-def apply_branding_branding(image_bytes: bytes, brand: str, slogan: str) -> bytes:
-    """
-    Adds a professional semi-transparent branding bar at the bottom of the image
-    with the brand name and slogan using Pillow.
-    """
-    try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-        width, height = img.size
-        
-        # Branding bar height (15% of image height)
-        bar_height = int(height * 0.15)
-        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
-        
-        # Draw a semi-transparent black gradient at the bottom
-        for i in range(bar_height):
-            # Gradual transparency
-            alpha = int(200 * (i / bar_height))
-            y = height - bar_height + i
-            draw.line([(0, y), (width, y)], fill=(0, 0, 0, alpha))
-            
-        # Try to load a clean font, fallback to default
-        try:
-            # Common paths for clean fonts on Windows/Linux
-            font_paths = [
-                "C:/Windows/Fonts/segoeuib.ttf", # Segoe UI Bold
-                "C:/Windows/Fonts/arial.ttf",
-                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
-            ]
-            brand_font = None
-            for p in font_paths:
-                try:
-                    brand_font = ImageFont.truetype(p, int(bar_height * 0.4))
-                    slogan_font = ImageFont.truetype(p, int(bar_height * 0.2))
-                    break
-                except: continue
-                
-            if not brand_font:
-                brand_font = ImageFont.load_default()
-                slogan_font = ImageFont.load_default()
-        except:
-            brand_font = ImageFont.load_default()
-            slogan_font = ImageFont.load_default()
+# ---------------------------------------------------------------------------
+# Business Logic — Image Branding Overlay
+# ---------------------------------------------------------------------------
 
-        # Draw Brand Name (Large)
-        brand_text = brand.upper()
-        draw.text((width // 2, height - int(bar_height * 0.7)), brand_text, fill="white", font=brand_font, anchor="mm")
-        
-        # Draw Slogan (Small)
-        draw.text((width // 2, height - int(bar_height * 0.3)), slogan, fill="#E5E7EB", font=slogan_font, anchor="mm")
-        
-        # Composite and convert back to RGB
-        out = Image.alpha_composite(img, overlay).convert("RGB")
-        
-        output = io.BytesIO()
-        out.save(output, format="JPEG", quality=95)
-        return output.getvalue()
-        
-    except Exception as e:
-        logger.error(f"Branding overlay failed: {e}")
-        return image_bytes
+def add_branding_overlay(image: Image.Image, brand_name: str, slogan: str) -> Image.Image:
+    """Adds a luxury-grade, semi-transparent bar at the bottom with centered Brand and Slogan."""
+    
+    # Clone image to avoid modifying original
+    img = image.copy().convert("RGBA")
+    width, height = img.size
+    
+    # Scaled bar height (18% of the image)
+    bar_height = int(height * 0.18)
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    # Semi-transparent black bar
+    draw.rectangle([0, height - bar_height, width, height], fill=(0, 0, 0, 180))
+    
+    # Font setup
+    try:
+        # High visibility fonts
+        brand_font = ImageFont.truetype("arialbd.ttf", int(bar_height * 0.28))
+        slogan_font = ImageFont.truetype("arial.ttf", int(bar_height * 0.20))
+    except (IOError, OSError):
+        brand_font = ImageFont.load_default()
+        slogan_font = ImageFont.load_default()
+
+    # Draw Brand (Uppercase)
+    brand_text = str(brand_name).upper()
+    try:
+        b_left, b_top, b_right, b_bottom = draw.textbbox((0, 0), brand_text, font=brand_font)
+        brand_w, brand_h = b_right - b_left, b_bottom - b_top
+    except AttributeError: # Fallback for older Pillow
+        brand_w, brand_h = draw.textsize(brand_text, font=brand_font)
+    
+    draw.text(
+        ((width - brand_w) // 2, height - bar_height + (bar_height // 4)),
+        brand_text,
+        font=brand_font,
+        fill=(255, 255, 255, 255)
+    )
+    
+    # Draw Slogan (Centered under Brand)
+    try:
+        s_left, s_top, s_right, s_bottom = draw.textbbox((0, 0), slogan, font=slogan_font)
+        slogan_w, slogan_h = s_right - s_left, s_bottom - s_top
+    except AttributeError:
+        slogan_w, slogan_h = draw.textsize(slogan, font=slogan_font)
+    
+    draw.text(
+        ((width - slogan_w) // 2, height - bar_height + (bar_height // 1.8)),
+        slogan,
+        font=slogan_font,
+        fill=(255, 255, 255, 220)
+    )
+    
+    return Image.alpha_composite(img, overlay).convert("RGB")
 
 def generate_hf_image(api_key: str, prompt: str) -> bytes | None:
     """
@@ -722,10 +721,14 @@ if st.session_state.ad_content:
                             current_prompt = st.session_state.get('custom_prompt_input', st.session_state.image_prompt)
                             raw_image = generate_hf_image(HUGGINGFACE_API_KEY, current_prompt)
                             if raw_image:
+                                pil_img = Image.open(io.BytesIO(raw_image))
                                 if enable_branding:
-                                    st.session_state.generated_image = apply_branding_branding(
-                                        raw_image, brand_name_input, st.session_state.ad_content['slogan']
+                                    final_pil = add_branding_overlay(
+                                        pil_img, brand_name_input, st.session_state.ad_content['slogan']
                                     )
+                                    buf = io.BytesIO()
+                                    final_pil.save(buf, format="JPEG", quality=95)
+                                    st.session_state.generated_image = buf.getvalue()
                                 else:
                                     st.session_state.generated_image = raw_image
                                 st.rerun()
@@ -784,13 +787,21 @@ if st.session_state.ad_content:
                     )
                     
                     if raw_image:
+                        # Convert bytes to PIL for processing
+                        pil_img = Image.open(io.BytesIO(raw_image))
+                        
                         if enable_branding:
-                            st.session_state.generated_image = apply_branding_branding(
-                                raw_image, brand_name_input, st.session_state.ad_content['slogan']
-                            )
+                            with st.spinner("🖋️ Applying professional branding overlay..."):
+                                final_pil = add_branding_overlay(
+                                    pil_img, brand_name_input, st.session_state.ad_content['slogan']
+                                )
+                                # Convert back to bytes for download/sharing
+                                buf = io.BytesIO()
+                                final_pil.save(buf, format="JPEG", quality=95)
+                                st.session_state.generated_image = buf.getvalue()
                         else:
                             st.session_state.generated_image = raw_image
-                        st.rerun() # Refresh to show buttons in the dropdown on the left immediately
+                        st.rerun()
 
         if st.session_state.generated_image:
             st.image(
