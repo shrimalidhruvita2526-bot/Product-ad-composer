@@ -532,55 +532,91 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
     st.header("📦 Product Selection")
 
-    if df is not None:
-        # Optimization: Limit to 5,000 unique products for better selectbox speed
-        # Sort first, then slice to ensure numerical (0-9) and alphabetical (A-Z) order is preserved.
-        all_products = df["product_name"].unique().tolist()
-        product_list = sorted(all_products)[:5000] 
-        
-        selected_name = st.selectbox(
-            "Choose Product from Dataset",
-            product_list,
-            help="Showing top 5,000 items for faster performance.",
+    # NEW: Toggle between Catalogue and Manual
+    app_mode = st.radio(
+        "Ad Creation Mode",
+        ["Catalogue", "✏️ Manual Entry"],
+        help="Choose 'Catalogue' for pre-built products or 'Manual' for your own ideas!"
+    )
+    st.divider()
+
+    selected_name = ""
+    product_description = ""
+    category_default = "General"
+    brand_default = "Aura"
+
+    if app_mode == "Catalogue":
+        if df is not None:
+            # Optimization: Limit to 5,000 unique products for better selectbox speed
+            # Sort first, then slice to ensure numerical (0-9) and alphabetical (A-Z) order is preserved.
+            all_products = df["product_name"].unique().tolist()
+            product_list = sorted(all_products)[:5000] 
+            
+            selected_name = st.selectbox(
+                "Choose Product from Dataset",
+                product_list,
+                help="Showing top 5,000 items for faster performance.",
+            )
+
+            # --- State Sync Logic ---
+            if "last_selected_product" not in st.session_state:
+                st.session_state.last_selected_product = selected_name
+
+            if st.session_state.last_selected_product != selected_name:
+                st.session_state.ad_content = None
+                st.session_state.image_prompt = None
+                st.session_state.generated_image = None
+                st.session_state.last_selected_product = selected_name
+                st.rerun()
+
+            selected_row = df[df["product_name"] == selected_name].iloc[0]
+            product_description = selected_row.get("description", "")
+            category_default = selected_row.get("main_category", "General")
+            
+            # Extract brand from dataset or fallback to smart detection
+            brand_default = selected_row.get("brand", "")
+            if not brand_default or pd.isna(brand_default) or str(brand_default).lower() in ["unknown", "na", "nan"]:
+                words = selected_name.split() if selected_name else ["Premium"]
+                if words[0].lower() in ["the", "a", "an"] and len(words) > 1:
+                    brand_default = f"{words[0]} {words[1]}"
+                else:
+                    brand_default = words[0]
+                brand_default = brand_default.strip(",.:'\" ")
+            
+            st.info(f"**Detected Category:** {category_default}")
+        else:
+            st.error("Dataset not found. Please ensure 'cleaned_product_data.csv' exists.")
+            app_mode = "✏️ Manual Entry" # Force to manual if no data
+    
+    if app_mode == "✏️ Manual Entry":
+        # --- Manual Entry Mode ---
+        selected_name = st.text_input(
+            "Product Name", 
+            placeholder="e.g. Handmade Ceramic Coffee Mug",
+            help="Enter the name of the product you want to advertise."
         )
+        brand_default = st.text_input(
+            "Brand Name",
+            placeholder="e.g. ClayArt Studio",
+            help="This name will appear on the image branding."
+        )
+        product_description = st.text_area(
+            "Product Description / Keywords",
+            placeholder="Briefly describe the product qualities to help AI predict audience...",
+            help="AI will use this text to suggest who to target (Teens, Pros, Seniors)."
+        )
+        
+        # State sync for Manual Mode
+        if "last_manual_name" not in st.session_state:
+            st.session_state.last_manual_name = selected_name
 
-        # --- State Sync Logic ---
-        # If the product changed, clear the generated content to avoid confusion
-        if "last_selected_product" not in st.session_state:
-            st.session_state.last_selected_product = selected_name
-
-        if st.session_state.last_selected_product != selected_name:
+        if st.session_state.last_manual_name != selected_name:
             st.session_state.ad_content = None
             st.session_state.image_prompt = None
             st.session_state.generated_image = None
-            st.session_state.last_selected_product = selected_name
-            st.rerun() # Refresh immediately to clear the UI
-
-        selected_row = df[df["product_name"] == selected_name].iloc[0]
-        product_description = selected_row.get("description", "")
-        category_default = selected_row.get("main_category", "General")
+            st.session_state.last_manual_name = selected_name
         
-        # Extract brand from dataset or fallback to smart detection
-        brand_default = selected_row.get("brand", "")
-        # If brand is missing or says 'unknown', extract from product name
-        if not brand_default or pd.isna(brand_default) or str(brand_default).lower() in ["unknown", "na", "nan"]:
-            # Take first 1-2 words as a strong brand candidate
-            words = selected_name.split() if selected_name else ["Premium"]
-            # Heuristic: If first word is short (e.g. 'The'), take two words
-            if words[0].lower() in ["the", "a", "an"] and len(words) > 1:
-                brand_default = f"{words[0]} {words[1]}"
-            else:
-                brand_default = words[0]
-            # Clean punctuation from the end (e.g. "Brand's" or "Brand:")
-            brand_default = brand_default.strip(",.:'\" ")
-            
-        st.info(f"**Detected Category:** {category_default}")
-    else:
-        st.error("Dataset not found. Please ensure 'cleaned_product_data.csv' exists.")
-        selected_name = st.text_input("Manual Product Name")
         category_default = "General"
-        brand_default = "Aura"
-        product_description = ""
 
     category_list = ["Fashion", "Electronics", "Fitness", "Food", "General"]
     category_input = st.selectbox(
