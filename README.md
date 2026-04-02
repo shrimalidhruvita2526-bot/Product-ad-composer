@@ -1,87 +1,88 @@
-# 🚀 AI Product Ad Composer
+# 🎨 AI Product Ad Composer Studio
 
-An AI-powered product advertisement generator that creates personalized ad copy and high-fidelity visuals from a real ecommerce product dataset.
+**Transform raw products into professional, branded advertisements in seconds.**
 
-## ✨ Features
+An intelligent, full-stack marketing tool that uses **Generative AI** (FLUX.1 & Qwen) and **Machine Learning** to create persona-targeted ad copy and ultra-realistic visuals from real ecommerce data.
 
-- **Smart Product Selection** — Browse thousands of real products from a cleaned Flipkart dataset
-- **High-Performance Copy Generation** — Instant ad copy using persona-matched deterministic templates
-- **High-Fidelity Visuals** — Integrates Hugging Face's FLUX.1 Schnell model to generate photorealistic product images
-- **Demographic Targeting** — Custom creative strategies for Teenagers, Professionals, and Seniors
-- **Simplified Setup** — No configuration needed for text generation logic
+---
 
-## 🏗️ Project Structure
+## 🌟 Key Features
+
+### 🛠️ Hybrid AI Engine
+- **✨ Cloud API (High-End)**: Uses a powerful **Qwen-2.5 7B** model for creative, high-fidelity prompt generation. Fast, light, and perfect for deployment.
+- **🤖 Local LLM (Downloaded)**: Support for local **Qwen-2.5 0.5B** inference for offline use and maximum privacy.
+
+### 🖼️ Professional Visuals
+- **High-Fidelity Images**: Powered by **FLUX.1 Schnell** for photorealistic commercial photography.
+- **Branding Overlay**: Automatically applies a semi-transparent branding bar with your **Brand Name** and **Slogan** to the final image.
+- **🔄 Regenerate**: Don't like a visual? Regenerate a new one with a single click using the same prompt.
+
+### 📈 Smart Audience Prediction
+- **AI-Powered Targeting**: Uses a trained **Random Forest/Linear Classifier** to automatically predict the best demographic (Teenagers, Professionals, Seniors) for any chosen product from the dataset.
+
+### 📤 Seamless Export & Share
+- **📥 Download Image**: Save high-resolution JPEGs with branding overlay instantly.
+- **📋 Copy & Share Ad**: One-click to copy the ad text and app link to your clipboard, or use the native Share sheet (WhatsApp, Instagram, etc.).
+
+---
+
+## 🏗️ Project Architecture
 
 ```
 project-ad-composer/
-├── app.py                        ← Main Streamlit application
-├── requirements.txt              ← Python dependencies
-├── .env.example                  ← API key template (safe to commit)
-├── .env                          ← Your real API keys (in .gitignore)
-├── .gitignore                    ← Protects secrets and large files
-├── README.md                     ← This file
+├── app.py                      # Main Streamlit Dashboard
+├── requirements.txt            # Project dependencies
+├── .env                        # Private API Keys (Hugging Face)
+├── .gitignore                  # Prevents secrets & large files from Git
 │
 ├── notebooks/
-│   └── Personalized_Ad_Composer.ipynb  ← Data exploration & cleaning
+│   ├── Personalized_Ad_Composer.ipynb # Data Processing & ML Training
+│   ├── audience_predictor.pkl         # Trained ML model
+│   └── cleaned_product_data.csv       # Cleaned Dataset (Tracked)
 │
-├── scripts/
-│   ├── test_api.py               ← NVIDIA API connectivity test
-│   ├── read_nb.py                ← Notebook cell inspector
-│   └── update_nb_script.py      ← One-off notebook path fixer
-│
-└── tests/
-    └── test_app.py               ← Unit tests (run with pytest)
+└── flipkart_com-ecommerce_sample.csv  # Raw raw data (Excluded)
 ```
 
-## ⚙️ Setup
+---
 
-### 1. Clone & Install Dependencies
+## ⚙️ Quick Start
+
+### 1. Installation
 ```bash
-git clone <your-repo-url>
-cd project-ad-composer
+git clone https://github.com/dhruvitabrainerhub/Product-Ad-composer.git
+cd Product-Ad-composer
 pip install -r requirements.txt
 ```
 
-### 2. Configure API Keys
+### 2. API Configuration
+Create a `.env` file in the root directory and add your Hugging Face API key:
 ```bash
-# Copy the template
-cp .env.example .env
-
-# Edit .env and add your real keys
-# HUGGINGFACE_API_KEY=hf_...
+HUGGINGFACE_API_KEY=your_hf_token_here
 ```
+> Get your free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
 
-- Get a **Hugging Face API key** from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) (free)
-
-### 3. Add the Dataset
-Place `cleaned_product_data.csv` in the project root directory. This file is excluded from git due to its large size.
-
-### 4. Run the Application
+### 3. Run Locally
 ```bash
 streamlit run app.py
 ```
 
-The app will open automatically at `http://localhost:8501`
+---
 
-## 🧪 Running Tests
-```bash
-pytest tests/ -v
-```
+## 🚀 Deployment (Streamlit Cloud)
 
-## 🔑 Environment Variables
+1. Push your code to your GitHub repository.
+2. Visit [share.streamlit.io](https://share.streamlit.io) and connect your repository.
+3. **Important**: Go to `Settings > Secrets` in the Streamlit dashboard and add your API key:
+   ```toml
+   HUGGINGFACE_API_KEY = "your_actual_key_here"
+   ```
 
-| Variable | Required | Description |
-|---|---|---|
-| `HUGGINGFACE_API_KEY` | Required | Enables FLUX.1 image generation |
+---
 
-> **Note:** The ad copy logic is now local and instant, requiring no external LLM API key.
+## 🛠️ Technology Stack
 
-## 🛠️ Tech Stack
-
-| Component | Technology |
-|---|---|
-| Web Framework | Streamlit |
-| Data Processing | Pandas |
-| Copy Generation | Deterministic Template Engine (Persona-based) |
-| Image Generation | Hugging Face — FLUX.1 Schnell |
-| Secrets Management | python-dotenv |
+- **Frontend**: Streamlit (Premium UI)
+- **Image Generation**: Hugging Face FLUX.1 (Schnell)
+- **Text Generation**: Hybrid (Local Qwen / Cloud Qwen API)
+- **Machine Learning**: Scikit-Learn / Joblib
+- **Image Processing**: Pillow (PIL)
