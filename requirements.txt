@@ -2,8 +2,12 @@ streamlit>=1.32.0
 pandas>=2.0.0
 requests>=2.31.0
 python-dotenv>=1.0.0
+matplotlib>=3.7.0
+scikit-learn>=1.2.0
+pillow>=10.1.0
 pytest>=8.0.0
-# Local LLM for image prompt generation
+
+# Local LLM for image prompt generation (Optional)
 # Note: Commented out for cloud deployment to stay under 1GB RAM limit.
 # torch>=2.0.0
 # transformers>=4.40.0
