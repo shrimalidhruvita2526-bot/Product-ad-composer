@@ -450,15 +450,14 @@ df = load_data()
 @st.cache_resource(show_spinner=False)
 def load_ml_model():
     """Load the trained audience predictor ML model."""
-    for model_name in ["audience_predictor.pkl", "audience_predictor.joblib"]:
-        model_path = BASE_DIR / "notebooks" / model_name
-        if model_path.exists():
-            try:
-                logger.info("Loading ML model from %s...", model_path)
-                return joblib.load(model_path)
-            except Exception as e:
-                logger.error("Failed to load ML model %s: %s", model_name, e)
-
+    model_path = BASE_DIR / "notebooks" / "audience_predictor.pkl"
+    if model_path.exists():
+        try:
+            logger.info("Loading ML model from %s...", model_path)
+            return joblib.load(model_path)
+        except Exception as e:
+            logger.error("Failed to load ML model: %s", e)
+    
     logger.warning("No audience predictor model found.")
     return None
 
