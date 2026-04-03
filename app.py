@@ -531,6 +531,69 @@ ml_model = load_ml_model()
 llm_pipe, llm_device = get_local_llm_pipeline()
 
 # ---------------------------------------------------------------------------
+# Bulk Processing Helpers
+# ---------------------------------------------------------------------------
+
+def generate_bulk_template() -> bytes:
+    """Creates a sample CSV template for bulk uploads."""
+    template_df = pd.DataFrame([
+        {
+            "product_name": "Premium Leather Wallet",
+            "main_category": "Fashion",
+            "description": "Handcrafted minimalist wallet with RFID protection.",
+            "brand": "Aura Luxe"
+        },
+        {
+            "product_name": "Wireless Noise Cancelling Headphones",
+            "main_category": "Electronics",
+            "description": "High-fidelity audio with 40-hour battery life.",
+            "brand": "SonicWave"
+        }
+    ])
+    return template_df.to_csv(index=False).encode('utf-8')
+
+def process_bulk_batch(batch_df: pd.DataFrame, model, progress_bar=None):
+    """
+    Processes a dataframe of products:
+    1. Predicts Audience
+    2. Generates Hinglish Ad Copy (Headline, Description, Slogan)
+    """
+    results = []
+    total = len(batch_df)
+    
+    for i, row in batch_df.iterrows():
+        p_name = str(row.get('product_name', 'Unnamed Product'))
+        p_desc = str(row.get('description', ''))
+        p_cat = str(row.get('main_category', 'General'))
+        p_brand = str(row.get('brand', 'Premium Brand'))
+        
+        # 1. Predict Audience
+        audience = "Professionals" # Default
+        if model is not None and p_desc:
+            try:
+                audience = model.predict([p_desc])[0]
+            except: pass
+            
+        # 2. Generate Copy
+        copy = generate_ad_copy_template(p_name, p_cat, audience)
+        
+        # Compile result
+        results.append({
+            "Product Name": p_name,
+            "Brand": p_brand,
+            "Category": p_cat,
+            "Predicted Audience": audience,
+            "Headline": copy.get('headline', ''),
+            "Ad Description": copy.get('description', ''),
+            "Slogan": copy.get('slogan', '')
+        })
+        
+        if progress_bar:
+            progress_bar.progress((i + 1) / total)
+            
+    return pd.DataFrame(results)
+
+# ---------------------------------------------------------------------------
 # Session State Initialisation
 # ---------------------------------------------------------------------------
 if "ad_content" not in st.session_state:
@@ -570,162 +633,181 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
     st.header("📦 Product Selection")
 
-    # NEW: Toggle between Catalogue and Manual
+    # NEW: Toggle between Catalogue, Manual, and Bulk
     app_mode = st.radio(
         "Ad Creation Mode",
-        ["Catalogue", "✏️ Manual Entry"],
-        help="Choose 'Catalogue' for pre-built products or 'Manual' for your own ideas!"
+        ["Catalogue", "✏️ Manual Entry", "🔍 Bulk Scanner"],
+        help="Choose 'Catalogue' for pre-built products, 'Manual' for your own ideas, or 'Bulk Scanner' for high-volume uploads!"
     )
     st.divider()
 
-    selected_name = ""
-    product_description = ""
-    category_default = "General"
-    brand_default = "Aura"
+    if app_mode in ["Catalogue", "✏️ Manual Entry"]:
+        selected_name = ""
+        product_description = ""
+        category_default = "General"
+        brand_default = "Aura"
 
-    if app_mode == "Catalogue":
-        if df is not None:
-            # Optimization: Limit to 5,000 unique products for better selectbox speed
-            # Sort first, then slice to ensure numerical (0-9) and alphabetical (A-Z) order is preserved.
-            all_products = df["product_name"].unique().tolist()
-            product_list = sorted(all_products)[:5000] 
+        if app_mode == "Catalogue":
+            if df is not None:
+                # Optimization: Limit to 5,000 unique products for better selectbox speed
+                all_products = df["product_name"].unique().tolist()
+                product_list = sorted(all_products)[:5000] 
+                
+                selected_name = st.selectbox(
+                    "Choose Product from Dataset",
+                    product_list,
+                    help="Showing top 5,000 items for faster performance.",
+                )
+
+                if "last_selected_product" not in st.session_state:
+                    st.session_state.last_selected_product = selected_name
+
+                if st.session_state.last_selected_product != selected_name:
+                    st.session_state.ad_content = None
+                    st.session_state.image_prompt = None
+                    st.session_state.generated_image = None
+                    st.session_state.last_selected_product = selected_name
+                    st.rerun()
+
+                selected_row = df[df["product_name"] == selected_name].iloc[0]
+                product_description = selected_row.get("description", "")
+                category_default = selected_row.get("main_category", "General")
+                
+                brand_default = selected_row.get("brand", "")
+                if not brand_default or pd.isna(brand_default) or str(brand_default).lower() in ["unknown", "na", "nan"]:
+                    words = selected_name.split() if selected_name else ["Premium"]
+                    brand_default = words[0].strip(",.:'\" ")
+                
+                st.info(f"**Detected Category:** {category_default}")
+            else:
+                st.error("Dataset not found.")
+                app_mode = "✏️ Manual Entry" 
+        
+        if app_mode == "✏️ Manual Entry":
+            selected_name = st.text_input("Product Name", placeholder="e.g. Handmade Ceramic Mug")
+            brand_default = st.text_input("Brand Name", placeholder="e.g. ClayArt Studio")
+            product_description = st.text_area("Product Description", placeholder="Briefly describe the product...")
             
-            selected_name = st.selectbox(
-                "Choose Product from Dataset",
-                product_list,
-                help="Showing top 5,000 items for faster performance.",
-            )
+            if "last_manual_name" not in st.session_state:
+                st.session_state.last_manual_name = selected_name
 
-            # --- State Sync Logic ---
-            if "last_selected_product" not in st.session_state:
-                st.session_state.last_selected_product = selected_name
-
-            if st.session_state.last_selected_product != selected_name:
+            if st.session_state.last_manual_name != selected_name:
                 st.session_state.ad_content = None
                 st.session_state.image_prompt = None
                 st.session_state.generated_image = None
-                st.session_state.last_selected_product = selected_name
-                st.rerun()
-
-            selected_row = df[df["product_name"] == selected_name].iloc[0]
-            product_description = selected_row.get("description", "")
-            category_default = selected_row.get("main_category", "General")
+                st.session_state.last_manual_name = selected_name
             
-            # Extract brand from dataset or fallback to smart detection
-            brand_default = selected_row.get("brand", "")
-            if not brand_default or pd.isna(brand_default) or str(brand_default).lower() in ["unknown", "na", "nan"]:
-                words = selected_name.split() if selected_name else ["Premium"]
-                if words[0].lower() in ["the", "a", "an"] and len(words) > 1:
-                    brand_default = f"{words[0]} {words[1]}"
-                else:
-                    brand_default = words[0]
-                brand_default = brand_default.strip(",.:'\" ")
-            
-            st.info(f"**Detected Category:** {category_default}")
-        else:
-            st.error("Dataset not found. Please ensure 'cleaned_product_data.csv' exists.")
-            app_mode = "✏️ Manual Entry" # Force to manual if no data
-    
-    if app_mode == "✏️ Manual Entry":
-        # --- Manual Entry Mode ---
-        selected_name = st.text_input(
-            "Product Name", 
-            placeholder="e.g. Handmade Ceramic Coffee Mug",
-            help="Enter the name of the product you want to advertise."
+            category_default = "General"
+
+        category_list = ["Fashion", "Electronics", "Fitness", "Food", "General"]
+        category_input = st.selectbox(
+            "Market Category",
+            category_list,
+            index=category_list.index(category_default) if category_default in category_list else 4,
         )
-        brand_default = st.text_input(
-            "Brand Name",
-            placeholder="e.g. ClayArt Studio",
-            help="This name will appear on the image branding."
-        )
-        product_description = st.text_area(
-            "Product Description / Keywords",
-            placeholder="Briefly describe the product qualities to help AI predict audience...",
-            help="AI will use this text to suggest who to target (Teens, Pros, Seniors)."
-        )
+
+        brand_name_input = st.text_input("Brand Name", value=brand_default)
+        enable_branding = st.toggle("📸 Professional Branding Overlay", value=True)
         
-        # State sync for Manual Mode
-        if "last_manual_name" not in st.session_state:
-            st.session_state.last_manual_name = selected_name
+        # --- ML Audience Predictor ---
+        demographics_list = ["Teenagers", "Professionals", "Seniors"]
+        pred_demographic = "Professionals"
 
-        if st.session_state.last_manual_name != selected_name:
-            st.session_state.ad_content = None
-            st.session_state.image_prompt = None
-            st.session_state.generated_image = None
-            st.session_state.last_manual_name = selected_name
-        
-        category_default = "General"
+        if ml_model is not None and product_description:
+            try:
+                pred_demographic = ml_model.predict([str(product_description)])[0]
+                st.success(f"🤖 AI Predicted Audience: {pred_demographic}")
+            except: pass
 
-    category_list = ["Fashion", "Electronics", "Fitness", "Food", "General"]
-    category_input = st.selectbox(
-        "Market Category",
-        category_list,
-        index=category_list.index(category_default) if category_default in category_list else 4,
-    )
+        demographic_input = st.selectbox(
+            "Target Audience",
+            demographics_list,
+            index=demographics_list.index(pred_demographic) if pred_demographic in demographics_list else 1
+        )
 
-    brand_name_input = st.text_input(
-        "Brand Name",
-        value=brand_default,
-        help="This name will be featured on the product in the generated image."
-    )
+        st.divider()
 
-    enable_branding = st.toggle("📸 Professional Branding Overlay", value=True, help="Automatically add a high-quality brand/slogan bar to your ad visual.")
-    
-    # --- ML Audience Predictor ---
-    demographics_list = ["Teenagers", "Professionals", "Seniors"]
-    pred_demographic = "Professionals"
+        if st.button("Step 1: Compose Ad Copy ✍️", type="primary"):
+            target_product = selected_name
+            if not target_product:
+                st.error("Please enter a product name first!")
+            else:
+                with st.spinner("✍️ Composing your ad copy..."):
+                    st.session_state.ad_content = generate_ad_copy_template(
+                        target_product, category_input, demographic_input
+                    )
+                with st.spinner("🤖 Crafting image prompt..."):
+                    st.session_state.image_prompt = generate_image_prompt_hybrid(
+                        target_product, demographic_input, st.session_state.ad_content.get("slogan", ""), 
+                        brand_name_input, ai_engine, llm_pipe, HUGGINGFACE_API_KEY
+                    )
+                st.session_state.generated_image = None
 
-    if ml_model is not None and product_description:
-        try:
-            pred_demographic = ml_model.predict([str(product_description)])[0]
-            st.success(f"🤖 AI Predicted Audience: {pred_demographic}")
-        except Exception as e:
-            logger.error("ML Prediction failed: %s", e)
-
-    demographic_input = st.selectbox(
-        "Target Audience (Auto-detected by AI)",
-        demographics_list,
-        index=demographics_list.index(pred_demographic) if pred_demographic in demographics_list else 1,
-        help="Our ML model automatically predicts the best audience for this product!"
-    )
-
-    st.divider()
-
-    if st.button("Step 1: Compose Ad Copy ✍️", type="primary"):
-        target_product = selected_name
-        target_desc = str(product_description) if product_description else ""
-
-        if not target_product:
-            st.error("Please enter a product name first!")
-        else:
-            # Step 1a: Template engine generates ad copy instantly
-            with st.spinner("✍️ Template engine composing your ad copy..."):
-                st.session_state.ad_content = generate_ad_copy_template(
-                    target_product, category_input, demographic_input
-                )
-
-            # Step 1b: Hybrid AI generates a rich image prompt
-            slogan = st.session_state.ad_content.get("slogan", "")
-            with st.spinner("🤖 AI crafting image prompt..."):
-                st.session_state.image_prompt = generate_image_prompt_hybrid(
-                    target_product, 
-                    demographic_input, 
-                    slogan, 
-                    brand_name_input, 
-                    ai_engine, 
-                    llm_pipe, 
-                    HUGGINGFACE_API_KEY
-                )
-
-            st.session_state.generated_image = None
+    elif app_mode == "🔍 Bulk Scanner":
+        st.info("Scanner Mode Active: Upload a file in the main area to begin.")
+        st.caption("This mode ignores manual selection and processes your entire dataset.")
 
 # ---------------------------------------------------------------------------
 # Main Display
 # ---------------------------------------------------------------------------
 st.title("🚀 AI Product Ad Composer")
-# Removed LLM caption for cleaner UI
 
-if st.session_state.ad_content:
+if app_mode == "🔍 Bulk Scanner":
+    st.markdown("### 🔍 Bulk Ad Scanner")
+    st.info("Perfect for marketing teams! Predict audience and generate Hinglish ad copy for your entire catalog in seconds.")
+    
+    col_t1, col_t2 = st.columns([1, 2])
+    with col_t1:
+        # 1. Download Template
+        template_data = generate_bulk_template()
+        st.download_button(
+            label="📥 Download CSV Template",
+            data=template_data,
+            file_name="ad_composer_template.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    
+    # 2. File Upload
+    uploaded_file = st.file_uploader("Step 2: Upload your dataset (CSV or Excel)", type=["csv", "xlsx"])
+    
+    if uploaded_file:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                input_df = pd.read_csv(uploaded_file)
+            else:
+                input_df = pd.read_excel(uploaded_file)
+            
+            st.markdown(f"#### 📂 Preview: {len(input_df)} Products Found")
+            st.dataframe(input_df.head(10), use_container_width=True)
+            
+            if st.button("🚀 Start Bulk AI Processing", type="primary", use_container_width=True):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                status_text.text("🤖 AI is analyzing your products...")
+                
+                results_df = process_bulk_batch(input_df, ml_model, progress_bar)
+                
+                status_text.text("✅ All products processed successfully!")
+                st.balloons()
+                
+                st.markdown("---")
+                st.markdown("### 📊 Generated Bulk Results")
+                st.dataframe(results_df, use_container_width=True)
+                
+                # Download Results
+                csv_results = results_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download Final Ad Report (CSV)",
+                    data=csv_results,
+                    file_name="bulk_ad_results.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
+
+elif st.session_state.ad_content:
     st.markdown("---")
     col1, col2 = st.columns([1, 1], gap="large")
 
